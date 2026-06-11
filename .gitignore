@@ -1,3 +1,6 @@
 *.zip
 *.rar
 *.md
+*.env
+node_modules
+*.txt

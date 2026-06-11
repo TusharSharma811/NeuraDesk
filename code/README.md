@@ -141,6 +141,17 @@ python code/main.py --no-reranker
 python -u code/main.py
 ```
 
+### Start the API
+
+```bash
+uvicorn api:app --reload --host 0.0.0.0 --port 8000
+```
+
+The API reuses the same retrieval, safety, and generation pipeline as the CLI.
+Corpus indexing is performed during server startup, and `stream=true` is
+supported in the body, query string, or `stream` / `X-Stream` header on the
+analysis endpoint.
+
 ---
 
 ## Output Format

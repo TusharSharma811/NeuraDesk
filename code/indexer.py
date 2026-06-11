@@ -265,7 +265,7 @@ def load_cached_index() -> Optional[tuple]:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
-def get_or_build_index(data_root: str) -> tuple:
+def get_or_build_index(data_root: str, force_rebuild: bool = False) -> tuple:
     """Load the FAISS index from cache, or build it from scratch.
     
     Returns:
@@ -274,7 +274,7 @@ def get_or_build_index(data_root: str) -> tuple:
     corpus_hash = _compute_corpus_hash(data_root)
     
     # Try loading from cache
-    cached = load_cached_index()
+    cached = None if force_rebuild else load_cached_index()
     if cached is not None:
         index, metadata, cached_hash = cached
         if cached_hash == corpus_hash:
@@ -284,7 +284,10 @@ def get_or_build_index(data_root: str) -> tuple:
         else:
             print("[indexer] Corpus changed — rebuilding index...")
     else:
-        print("[indexer] No cache found — building index from scratch...")
+        if force_rebuild:
+            print("[indexer] Forced rebuild requested — building index from scratch...")
+        else:
+            print("[indexer] No cache found — building index from scratch...")
     
     # Build fresh
     model = SentenceTransformer(EMBEDDING_MODEL)
@@ -293,6 +296,13 @@ def get_or_build_index(data_root: str) -> tuple:
     save_index(index, metadata, corpus_hash)
     
     return index, metadata, model
+
+
+def clear_index_cache() -> None:
+    """Remove cached index artifacts so the next load rebuilds from scratch."""
+    for path in (INDEX_FILE, META_FILE, HASH_FILE):
+        if path.exists():
+            path.unlink()
 
 
 if __name__ == "__main__":

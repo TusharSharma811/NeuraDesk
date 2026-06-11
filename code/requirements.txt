@@ -6,3 +6,5 @@ rank-bm25>=0.2.2
 python-dotenv>=1.0
 requests>=2.31
 pandas>=2.2
+fastapi>=0.115
+uvicorn[standard]>=0.30

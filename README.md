@@ -141,6 +141,43 @@ python code/main.py --no-reranker
 python -u code/main.py
 ```
 
+### Run the FastAPI server
+
+```bash
+uvicorn api:app --app-dir code --reload --host 0.0.0.0 --port 8000
+```
+
+The server loads the corpus index during startup, so the heavy embedding and
+FAISS setup happens once instead of on every request.
+
+The API exposes:
+
+- `GET /health` for readiness checks
+- `POST /rag/retrieve` to inspect retrieved context
+- `POST /rag/analyze` for the full retrieval + safety + generation flow
+- `POST /rag/batch` for multiple tickets in one call
+- `POST /corpus/upsert` to write a markdown document into the corpus and rebuild the index
+- `POST /corpus/refresh` to reload or rebuild the index after external corpus changes
+
+Example request:
+
+```bash
+curl -X POST http://127.0.0.1:8000/rag/analyze \
+    -H "Content-Type: application/json" \
+    -d '{"issue":"How do I extend a test?","subject":"Test timing","company":"HackerRank"}'
+```
+
+To stream progress events instead of a single JSON response, set `stream=true`
+in the request body, query string, or a `stream: true` / `X-Stream: true`
+header.
+
+### Run with Docker
+
+```bash
+docker build -t support-rag .
+docker run --rm -p 8000:8000 --env-file .env support-rag
+```
+
 ---
 
 ## Output Format

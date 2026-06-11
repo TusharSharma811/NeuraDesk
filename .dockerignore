@@ -1,0 +1,16 @@
+.git
+.gitignore
+.venv
+__pycache__
+**/__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.mypy_cache
+code/.cache
+support_tickets/output.csv
+support_tickets/sample_output.csv
+log.txt
+*.log
+.env
