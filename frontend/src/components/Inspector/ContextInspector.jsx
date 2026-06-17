@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Search, Copy, ChevronDown, ChevronRight, Layers, Hash, Clock, FileText, GitCompare } from 'lucide-react';
 import { retrieveContext, buildCurl } from '../../api';
-import { useToast } from '../../App';
+import { useToast, useActivity } from '../../App';
 
 export default function ContextInspector() {
   const toast = useToast();
+  const log = useActivity();
   const [form, setForm] = useState({ issue: '', subject: '', company: '' });
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
@@ -17,6 +18,8 @@ export default function ContextInspector() {
     try {
       const data = await retrieveContext({ issue: form.issue, subject: form.subject, company: form.company || undefined });
       setResult(data);
+      const maxScore = data.documents?.length ? Math.max(...data.documents.map(d => d.relevance_score || 0)) : 0;
+      log('info', `Retrieved ${data.documents?.length || 0} chunks — max score: ${maxScore.toFixed(2)}`);
       toast(`Retrieved ${data.documents?.length || 0} chunks`, 'success');
     } catch (err) { toast(err.message, 'error'); }
     finally { setLoading(false); }

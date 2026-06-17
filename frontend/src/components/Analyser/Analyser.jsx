@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Play, Copy, Code, FileText, Shield, ChevronDown, ChevronRight, Clock, Hash, Layers } from 'lucide-react';
 import { analyseTicket, analyseTicketStream, buildCurl } from '../../api';
-import { useToast } from '../../App';
+import { useToast, useActivity } from '../../App';
 
 const COMPANIES = ['', 'HackerRank', 'Claude', 'Visa'];
 const PROVIDERS = ['gemini', 'ollama', 'groq'];
@@ -18,6 +18,7 @@ const PIPELINE_STAGES = [
 
 export default function Analyser() {
   const toast = useToast();
+  const log = useActivity();
   const [form, setForm] = useState({ issue: '', subject: '', company: '', provider: localStorage.getItem('rag_provider') || 'gemini', use_reranker: true });
   const [streaming, setStreaming] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -38,6 +39,7 @@ export default function Analyser() {
     startRef.current = Date.now();
 
     const ticket = { issue: form.issue, subject: form.subject, company: form.company || undefined, provider: form.provider, use_reranker: form.use_reranker };
+    log('info', `Analysis started — provider: ${form.provider}, reranker: ${form.use_reranker ? 'on' : 'off'}`);
     try {
       if (streaming) {
         let stageIdx = 0;
@@ -45,9 +47,9 @@ export default function Analyser() {
           const elapsed = Date.now() - startRef.current;
           setEvents(prev => [...prev, { ...evt, elapsed }]);
           if (evt.type === 'status') { stageIdx = 1; setPipelineStage(1); setStageTimings(t => ({ ...t, received: elapsed })); }
-          if (evt.type === 'retrieval') { setPipelineStage(3); setStageTimings(t => ({ ...t, classify: elapsed - 50, retrieve: elapsed })); }
+          if (evt.type === 'retrieval') { setPipelineStage(3); setStageTimings(t => ({ ...t, classify: elapsed - 50, retrieve: elapsed })); log('info', `Retrieved ${evt.data?.count || evt.data?.documents?.length || 0} chunks in ${elapsed}ms`); }
           if (evt.type === 'guidance') { setPipelineStage(4); setStageTimings(t => ({ ...t, rerank: elapsed })); }
-          if (evt.type === 'result') { setResult(evt.data); setPipelineStage(6); setStageTimings(t => ({ ...t, assemble: elapsed - 200, generate: elapsed, complete: elapsed })); }
+          if (evt.type === 'result') { setResult(evt.data); setPipelineStage(6); setStageTimings(t => ({ ...t, assemble: elapsed - 200, generate: elapsed, complete: elapsed })); const r = evt.data?.result || evt.data; log(r?.status === 'escalated' ? 'warn' : 'success', `Analysis complete — status: ${r?.status}, area: ${r?.product_area}`); }
         });
         toast('Analysis complete', 'success');
       } else {

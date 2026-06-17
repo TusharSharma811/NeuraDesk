@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { Play, Download, Upload, FileUp, CheckCircle, XCircle, Clock, BarChart3 } from 'lucide-react';
 import { batchAnalyse } from '../../api';
-import { useToast } from '../../App';
+import { useToast, useActivity } from '../../App';
 
 const SAMPLE = `[
   {"issue": "How do I extend a test deadline?", "subject": "Test timing", "company": "HackerRank"},
@@ -13,6 +13,7 @@ const SAMPLE = `[
 
 export default function BatchProcessor() {
   const toast = useToast();
+  const log = useActivity();
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
@@ -41,11 +42,17 @@ export default function BatchProcessor() {
     const tickets = parseInput();
     if (!tickets || !tickets.length) { toast('Invalid input — paste JSON array or CSV', 'error'); return; }
     setLoading(true); setResults(null); setProgress({ current: 0, total: tickets.length });
+    log('info', `Batch started — ${tickets.length} tickets queued`);
+    const t0 = Date.now();
     try {
       const data = await batchAnalyse(tickets);
       setResults(data);
       setProgress({ current: tickets.length, total: tickets.length });
+      const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+      const replied = data.results?.filter(r => (r.result || r).status === 'replied').length || 0;
+      const escalated = data.results?.filter(r => (r.result || r).status === 'escalated').length || 0;
       toast(`Processed ${data.count} tickets`, 'success');
+      log('success', `Batch complete — ${replied} replied, ${escalated} escalated (${elapsed}s)`);
     } catch (err) { toast(err.message, 'error'); } finally { setLoading(false); }
   };
 

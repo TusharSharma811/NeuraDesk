@@ -1,73 +1,17 @@
-import { useState, useEffect, useRef } from 'react';
-import { Database, Cpu, Building2, ArrowRight, RefreshCw, AlertTriangle, Clock, Zap, BarChart3, Shield, Globe, TrendingUp, TrendingDown, Activity } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { Database, RefreshCw, AlertTriangle, Zap, BarChart3, Shield, CheckCircle } from 'lucide-react';
 
-const MOCK_ACTIVITY = [
-  { level: 'info', msg: 'System initialized — corpus loaded', time: -240 },
-  { level: 'success', msg: 'FAISS index ready — 768 vectors indexed', time: -180 },
-  { level: 'info', msg: 'BM25 keyword index built', time: -178 },
-  { level: 'success', msg: 'Cross-encoder reranker loaded (ms-marco-MiniLM-L-6-v2)', time: -175 },
-  { level: 'info', msg: 'Ticket #84219 routed → HackerRank/screen', time: -120 },
-  { level: 'info', msg: 'Retrieval completed in 108ms — 5 chunks returned', time: -118 },
-  { level: 'success', msg: 'Ticket #84219 resolved — status: replied', time: -112 },
-  { level: 'warn', msg: 'Low-confidence retrieval detected (score: 0.23)', time: -90 },
-  { level: 'info', msg: 'Ticket #84220 escalated — billing pattern matched', time: -88 },
-  { level: 'info', msg: 'Batch job started — 12 tickets queued', time: -60 },
-  { level: 'success', msg: 'Batch complete — 11 replied, 1 escalated', time: -45 },
-  { level: 'success', msg: 'Corpus reindexed — 769 documents', time: -20 },
-  { level: 'info', msg: 'Health check passed — all systems nominal', time: -5 },
-];
-
-function timeAgo(seconds) {
-  const d = new Date(Date.now() + seconds * 1000);
-  return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-}
-
-function Sparkline({ data = [], color = 'var(--accent)', height = 24 }) {
-  const max = Math.max(...data, 1);
-  return (
-    <div className="sparkline" style={{ height: `${height}px` }}>
-      {data.map((v, i) => (
-        <div key={i} className="sparkline-bar" style={{
-          height: `${Math.max((v / max) * 100, 4)}%`,
-          background: i === data.length - 1 ? color : undefined,
-        }} />
-      ))}
-    </div>
-  );
-}
-
-function MetricCard({ label, value, delta, deltaDir, sparkData, color, unit = '' }) {
-  return (
-    <div className="metric-card animate-in">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <span className="label">{label}</span>
-        {delta && (
-          <span className={`metric-delta ${deltaDir}`}>
-            {deltaDir === 'up' ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-            {delta}
-          </span>
-        )}
-      </div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem' }}>
-        <span className="metric-value" style={{ color: color || 'var(--fg)' }}>{value}</span>
-        {unit && <span className="label" style={{ fontSize: '0.5625rem' }}>{unit}</span>}
-      </div>
-      {sparkData && <Sparkline data={sparkData} color={color} />}
-    </div>
-  );
-}
-
-export default function Dashboard({ health, healthStatus, onRefresh, onNavigate }) {
+export default function Dashboard({ health, healthStatus, onRefresh, onNavigate, activities = [], sessionStart }) {
   const feedRef = useRef(null);
-  const [activities] = useState(() => MOCK_ACTIVITY.map(a => ({ ...a, time: timeAgo(a.time) })));
 
   useEffect(() => {
     if (feedRef.current) feedRef.current.scrollTop = feedRef.current.scrollHeight;
   }, [activities]);
 
-  const docCount = health?.documents || '—';
+  const docCount = health?.documents;
   const companies = health?.companies || [];
   const reranker = health?.reranker || 'off';
+  const uptime = sessionStart ? formatUptime(Date.now() - sessionStart) : '—';
 
   return (
     <div className="animate-in">
@@ -86,11 +30,19 @@ export default function Dashboard({ health, healthStatus, onRefresh, onNavigate 
               Monitor, analyze, and optimize AI-powered customer support workflows through retrieval inspection, ticket analysis, corpus management, and batch evaluation.
             </p>
           </div>
-          {/* System status */}
+          {/* Live system status — all from real API data */}
           <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
-            <StatusPill label="API" status={healthStatus === 'ok' ? 'ok' : 'error'} text={healthStatus === 'ok' ? 'Operational' : 'Offline'} />
-            <StatusPill label="Model" status="ok" text="Gemini 2.0 Flash" />
-            <StatusPill label="Reranker" status={reranker === 'on' ? 'ok' : 'warn'} text={reranker === 'on' ? 'Active' : 'Disabled'} />
+            <StatusPill
+              label="API"
+              status={healthStatus === 'ok' ? 'ok' : healthStatus === 'loading' ? 'loading' : 'error'}
+              text={healthStatus === 'ok' ? 'Operational' : healthStatus === 'loading' ? 'Connecting...' : 'Offline'}
+            />
+            <StatusPill label="Session" status="ok" text={uptime} />
+            <StatusPill
+              label="Reranker"
+              status={healthStatus !== 'ok' ? 'error' : reranker === 'on' ? 'ok' : 'warn'}
+              text={healthStatus !== 'ok' ? 'Unknown' : reranker === 'on' ? 'Active' : 'Disabled'}
+            />
           </div>
         </div>
       </div>
@@ -102,59 +54,80 @@ export default function Dashboard({ health, healthStatus, onRefresh, onNavigate 
           <div style={{ flex: 1 }}>
             <p style={{ fontWeight: 600, fontSize: '0.8125rem' }}>Backend Unreachable</p>
             <p className="muted" style={{ fontSize: '0.75rem' }}>
-              <code className="mono" style={{ color: 'var(--accent)', fontSize: '0.6875rem' }}>uvicorn api:app --app-dir code --reload --port 8000</code>
+              Start the server from <code className="mono accent" style={{ fontSize: '0.6875rem' }}>backend/</code> directory:
+              <code className="mono" style={{ color: 'var(--accent)', fontSize: '0.6875rem', marginLeft: '0.25rem' }}>uvicorn api:app --app-dir code --reload --port 8000</code>
             </p>
           </div>
           <button className="btn-outline btn-sm" onClick={onRefresh}><RefreshCw size={11} /> Retry</button>
         </div>
       )}
 
-      {/* Metrics Grid */}
+      {/* Metrics Grid — all derived from real /health response */}
       <div style={{ marginBottom: '1.5rem' }}>
         <div className="section-header">
           <div className="section-title">
             <div className="section-bar" />
             <span className="label">SYSTEM METRICS</span>
+            {healthStatus === 'ok' && <span className="badge badge-success" style={{ marginLeft: '0.5rem' }}>LIVE</span>}
           </div>
           <button className="btn-ghost btn-sm" onClick={onRefresh}><RefreshCw size={11} /> Refresh</button>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: 'var(--border)', border: '1px solid var(--border)' }}>
-          <MetricCard label="CORPUS DOCUMENTS" value={docCount} delta="+12" deltaDir="up" sparkData={[4,6,5,8,7,9,8,10,11,12]} />
-          <MetricCard label="INDEXED CHUNKS" value={health ? Math.round(docCount * 2.4) : '—'} delta="+28" deltaDir="up" sparkData={[10,14,12,18,16,20,19,22,24,28]} />
-          <MetricCard label="ACTIVE DOMAINS" value={companies.length || '—'} sparkData={[3,3,3,3,3,3,3,3,3,3]} color="var(--cyan)" />
-          <MetricCard label="RERANKER" value={reranker === 'on' ? 'ACTIVE' : 'OFF'} color={reranker === 'on' ? 'var(--success)' : 'var(--muted-fg)'} />
-          <MetricCard label="AVG RETRIEVAL" value="108" unit="ms" delta="-12ms" deltaDir="up" sparkData={[140,135,128,120,118,112,115,110,108,108]} color="var(--success)" />
-          <MetricCard label="AVG RESPONSE" value="2.4" unit="s" sparkData={[3.2,3.0,2.8,2.6,2.5,2.5,2.4,2.4,2.4,2.4]} />
-          <MetricCard label="CACHE HIT RATE" value="94.2" unit="%" delta="+2.1%" deltaDir="up" sparkData={[88,89,90,91,91,92,93,93,94,94]} color="var(--success)" />
-          <MetricCard label="DAILY REQUESTS" value="847" delta="+63" deltaDir="up" sparkData={[620,680,710,720,750,780,790,810,830,847]} color="var(--accent)" />
-        </div>
+
+        {healthStatus === 'ok' && health ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: 'var(--border)', border: '1px solid var(--border)' }}>
+            <MetricCard label="CORPUS DOCUMENTS" value={docCount.toLocaleString()} color="var(--fg)" />
+            <MetricCard label="ACTIVE DOMAINS" value={companies.length} color="var(--cyan)" />
+            <MetricCard label="RERANKER STATUS" value={reranker === 'on' ? 'ACTIVE' : 'OFF'} color={reranker === 'on' ? 'var(--success)' : 'var(--muted-fg)'} />
+            <MetricCard label="API STATUS" value={health.status?.toUpperCase()} color="var(--success)" />
+          </div>
+        ) : healthStatus === 'loading' ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: 'var(--border)', border: '1px solid var(--border)' }}>
+            {[1,2,3,4].map(i => (
+              <div key={i} style={{ background: 'var(--bg-elevated)', padding: '1rem 1.125rem' }}>
+                <div className="skeleton" style={{ width: '60%', marginBottom: '0.5rem', height: '0.625rem' }} />
+                <div className="skeleton" style={{ width: '40%', height: '1.5rem' }} />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ border: '1px solid var(--border)', padding: '1.5rem', textAlign: 'center' }}>
+            <p className="muted" style={{ fontSize: '0.75rem' }}>Connect to the backend to see live metrics</p>
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
-        {/* Activity Feed */}
+        {/* Activity Feed — real session events */}
         <div>
           <div className="section-header">
             <div className="section-title">
               <div className="section-bar" />
-              <span className="label">ACTIVITY STREAM</span>
+              <span className="label">SESSION ACTIVITY</span>
             </div>
             <span className="label" style={{ fontSize: '0.5625rem' }}>{activities.length} events</span>
           </div>
-          <div className="activity-feed" ref={feedRef}>
-            {activities.map((a, i) => (
-              <div key={i} className="activity-item">
-                <span className="activity-time">{a.time}</span>
-                <span className={`activity-level ${a.level}`}>
-                  {a.level === 'info' ? 'INFO' : a.level === 'success' ? 'OK' : a.level === 'warn' ? 'WARN' : 'ERR'}
-                </span>
-                <span style={{ color: a.level === 'warn' ? 'var(--warning)' : 'var(--fg)', fontSize: '0.6875rem' }}>{a.msg}</span>
-              </div>
-            ))}
-          </div>
+          {activities.length > 0 ? (
+            <div className="activity-feed" ref={feedRef}>
+              {activities.map((a, i) => (
+                <div key={i} className="activity-item">
+                  <span className="activity-time">{a.time}</span>
+                  <span className={`activity-level ${a.level}`}>
+                    {a.level === 'info' ? 'INFO' : a.level === 'success' ? 'OK' : a.level === 'warn' ? 'WARN' : 'ERR'}
+                  </span>
+                  <span style={{ color: a.level === 'error' ? 'var(--error)' : a.level === 'warn' ? 'var(--warning)' : 'var(--fg)', fontSize: '0.6875rem' }}>{a.msg}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ border: '1px dashed var(--border)', padding: '2rem', textAlign: 'center' }}>
+              <p className="muted" style={{ fontSize: '0.6875rem' }}>No activity yet this session</p>
+            </div>
+          )}
         </div>
 
-        {/* Quick Actions */}
+        {/* Right column */}
         <div>
+          {/* Quick Actions */}
           <div className="section-header">
             <div className="section-title">
               <div className="section-bar" />
@@ -168,17 +141,16 @@ export default function Dashboard({ health, healthStatus, onRefresh, onNavigate 
             <ActionCard icon={<Database size={15} strokeWidth={1.5} />} title="Manage Corpus" desc="Knowledge base" onClick={() => onNavigate('corpus')} />
           </div>
 
-          {/* Domain breakdown */}
+          {/* Domain breakdown — real company data from /health */}
           {companies.length > 0 && (
             <div style={{ marginTop: '1rem' }}>
-              <span className="label" style={{ display: 'block', marginBottom: '0.5rem' }}>DOMAIN BREAKDOWN</span>
+              <span className="label" style={{ display: 'block', marginBottom: '0.5rem' }}>INDEXED DOMAINS</span>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
                 {companies.map(c => (
-                  <div key={c} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-                    <span className="mono" style={{ fontSize: '0.6875rem', fontWeight: 600, width: '80px', textTransform: 'capitalize' }}>{c}</span>
-                    <div style={{ flex: 1, height: '4px', background: 'var(--border)' }}>
-                      <div style={{ height: '100%', background: 'var(--accent)', width: c === 'hackerrank' ? '78%' : c === 'claude' ? '18%' : '4%', transition: 'width 500ms var(--ease-out)' }} />
-                    </div>
+                  <div key={c} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.375rem 0.625rem', border: '1px solid var(--border)', background: 'var(--bg-elevated)' }}>
+                    <CheckCircle size={11} style={{ color: 'var(--success)', flexShrink: 0 }} />
+                    <span className="mono" style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'capitalize' }}>{c}</span>
+                    <span className="badge badge-success" style={{ marginLeft: 'auto', fontSize: '0.5rem' }}>INDEXED</span>
                   </div>
                 ))}
               </div>
@@ -190,13 +162,31 @@ export default function Dashboard({ health, healthStatus, onRefresh, onNavigate 
   );
 }
 
+function formatUptime(ms) {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${s % 60}s`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${m % 60}m`;
+}
+
+function MetricCard({ label, value, color }) {
+  return (
+    <div className="metric-card animate-in">
+      <span className="label">{label}</span>
+      <span className="metric-value" style={{ color: color || 'var(--fg)' }}>{value}</span>
+    </div>
+  );
+}
+
 function StatusPill({ label, status, text }) {
-  const colors = { ok: 'var(--success)', error: 'var(--error)', warn: 'var(--warning)' };
+  const colors = { ok: 'var(--success)', error: 'var(--error)', warn: 'var(--warning)', loading: 'var(--warning)' };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
       <span className="label" style={{ fontSize: '0.5625rem' }}>{label}</span>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
-        <span className="status-dot" style={{ background: colors[status], boxShadow: `0 0 6px ${colors[status]}`, width: '5px', height: '5px' }} />
+        <span className={`status-dot ${status === 'loading' ? 'status-dot-loading' : ''}`} style={{ background: colors[status], boxShadow: `0 0 6px ${colors[status]}`, width: '5px', height: '5px' }} />
         <span className="mono" style={{ fontSize: '0.6875rem', fontWeight: 500 }}>{text}</span>
       </div>
     </div>

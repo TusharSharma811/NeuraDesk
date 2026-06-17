@@ -1,11 +1,12 @@
 import { useState, useRef } from 'react';
 import { Upload, RefreshCw, FolderSync, FileUp, Database, Clock, BarChart3, Layers, CheckCircle } from 'lucide-react';
 import { upsertCorpus, refreshCorpus } from '../../api';
-import { useToast } from '../../App';
+import { useToast, useActivity } from '../../App';
 
 export default function CorpusManager() {
   const toast = useToast();
-  const [tab, setTab] = useState('upsert'); // upsert | refresh | analytics
+  const log = useActivity();
+  const [tab, setTab] = useState('upsert');
   const [upsertPath, setUpsertPath] = useState('');
   const [upsertContent, setUpsertContent] = useState('');
   const [upsertForce, setUpsertForce] = useState(true);
@@ -24,6 +25,7 @@ export default function CorpusManager() {
     try {
       const data = await upsertCorpus(upsertPath, upsertContent, upsertForce);
       setUpsertResult(data);
+      log('success', `Document upserted — ${data.documents} total docs, path: ${upsertPath}`);
       toast('Document upserted successfully', 'success');
     } catch (err) { toast(err.message, 'error'); }
     finally { setUpsertLoading(false); }
@@ -34,6 +36,7 @@ export default function CorpusManager() {
     try {
       const data = await refreshCorpus(refreshForce);
       setRefreshResult(data);
+      log('success', `Index refreshed — ${data.documents} docs, reranker: ${data.reranker}`);
       toast('Index refreshed', 'success');
     } catch (err) { toast(err.message, 'error'); }
     finally { setRefreshLoading(false); }
@@ -61,7 +64,7 @@ export default function CorpusManager() {
 
       {/* Sub-tabs */}
       <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1.25rem' }}>
-        {[{ id: 'analytics', label: 'Analytics', icon: <BarChart3 size={11} /> }, { id: 'upsert', label: 'Upsert Document', icon: <Upload size={11} /> }, { id: 'refresh', label: 'Rebuild Index', icon: <RefreshCw size={11} /> }].map(t => (
+        {[{ id: 'upsert', label: 'Upsert Document', icon: <Upload size={11} /> }, { id: 'refresh', label: 'Rebuild Index', icon: <RefreshCw size={11} /> }].map(t => (
           <button key={t.id} className="btn-ghost btn-sm" onClick={() => setTab(t.id)}
             style={{ color: tab === t.id ? 'var(--accent)' : undefined, fontWeight: tab === t.id ? 600 : undefined, borderBottom: tab === t.id ? '2px solid var(--accent)' : '2px solid transparent', borderRadius: 0, padding: '0.375rem 0.75rem' }}>
             {t.icon} {t.label}
@@ -69,35 +72,7 @@ export default function CorpusManager() {
         ))}
       </div>
 
-      {/* Analytics */}
-      {tab === 'analytics' && (
-        <div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: 'var(--border)', border: '1px solid var(--border)', marginBottom: '1.25rem' }}>
-            <AnalyticCard icon={<Database size={14} />} label="TOTAL DOCUMENTS" value="768" />
-            <AnalyticCard icon={<Layers size={14} />} label="AVG CHUNKS/DOC" value="2.4" />
-            <AnalyticCard icon={<Clock size={14} />} label="LAST INGESTION" value="2m ago" />
-            <AnalyticCard icon={<BarChart3 size={14} />} label="INDEX SIZE" value="12.4 MB" />
-          </div>
 
-          <div className="section-header" style={{ marginBottom: '0.75rem' }}>
-            <div className="section-title"><div className="section-bar" /><span className="label">COLLECTION BREAKDOWN</span></div>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {[{ name: 'hackerrank', docs: 600, pct: 78 }, { name: 'claude', docs: 150, pct: 19.5 }, { name: 'visa', docs: 18, pct: 2.5 }].map(c => (
-              <div key={c.name} className="card" style={{ padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <span className="mono" style={{ fontSize: '0.75rem', fontWeight: 600, width: '100px', textTransform: 'capitalize' }}>{c.name}</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                    <span className="label" style={{ fontSize: '0.5625rem' }}>{c.docs} documents</span>
-                    <span className="label" style={{ fontSize: '0.5625rem' }}>{c.pct}%</span>
-                  </div>
-                  <div className="confidence-track"><div className="confidence-fill" style={{ width: `${c.pct}%`, background: 'var(--accent)' }} /></div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Upsert */}
       {tab === 'upsert' && (
