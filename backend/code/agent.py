@@ -101,7 +101,7 @@ def _call_gemini(
     for attempt in range(max_retries + 1):
         try:
             response = client.models.generate_content(
-                model="gemini-2.0-flash",
+                model=os.environ.get("GEMINI_MODEL", "gemini-2.5-flash"),
                 contents=[
                     types.Content(
                         role="user",
